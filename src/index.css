@@ -1,0 +1,44 @@
+@import 'tailwindcss';
+
+/* Paleta única del dashboard: se declara como tokens de Tailwind v4 para que
+   componentes y gráficos (que reciben colores por JS) compartan la fuente. */
+@theme {
+  --color-ink-950: #070b16;
+  --color-ink-900: #0b1020;
+  --color-ink-850: #10162b;
+  --color-ink-800: #151d38;
+  --color-ink-700: #1e2848;
+  --color-ink-600: #2b3763;
+  --color-mist-400: #8b98c4;
+  --color-mist-200: #c7cfe6;
+  --color-bull-500: #22c55e;
+  --color-bull-400: #34d399;
+  --color-bear-500: #ef4444;
+  --color-bear-400: #f87171;
+  --color-warn-400: #fbbf24;
+  --color-accent-400: #60a5fa;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-ink-950 text-mist-200 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  @apply outline-2 outline-offset-2 outline-accent-400;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
