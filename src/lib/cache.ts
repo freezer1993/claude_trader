@@ -1,3 +1,5 @@
+import { CACHE_NS, clearNamespace, readJson, writeJson } from './storage';
+
 /**
  * Caché en LocalStorage con doble propósito:
  *  1. Evitar llamadas redundantes dentro del TTL (la API gratuita de CoinGecko
@@ -6,58 +8,25 @@
  *     válida aunque esté vencida, marcada como `stale` para avisar al usuario.
  */
 
-const NAMESPACE = 'claude-trader:v1:';
-
 export interface CacheEntry<T> {
   data: T;
   /** Epoch ms del momento en que se guardó. */
   savedAt: number;
 }
 
-/** LocalStorage puede lanzar (modo privado, cuota llena, SSR); nunca debe romper la app. */
-function safeStorage(): Storage | null {
-  try {
-    const probe = '__ct_probe__';
-    window.localStorage.setItem(probe, '1');
-    window.localStorage.removeItem(probe);
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
 export function readCache<T>(key: string): CacheEntry<T> | null {
-  const store = safeStorage();
-  if (!store) return null;
-  try {
-    const raw = store.getItem(NAMESPACE + key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as CacheEntry<T>;
-    if (typeof parsed?.savedAt !== 'number' || parsed.data === undefined) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
+  const entry = readJson<CacheEntry<T>>(CACHE_NS, key);
+  if (!entry || typeof entry.savedAt !== 'number' || entry.data === undefined) return null;
+  return entry;
 }
 
 export function writeCache<T>(key: string, data: T): void {
-  const store = safeStorage();
-  if (!store) return;
   const entry: CacheEntry<T> = { data, savedAt: Date.now() };
-  try {
-    store.setItem(NAMESPACE + key, JSON.stringify(entry));
-  } catch {
-    // Cuota excedida: se purgan las entradas propias y se reintenta una vez.
-    try {
-      for (let i = store.length - 1; i >= 0; i -= 1) {
-        const k = store.key(i);
-        if (k && k.startsWith(NAMESPACE)) store.removeItem(k);
-      }
-      store.setItem(NAMESPACE + key, JSON.stringify(entry));
-    } catch {
-      // Sin caché disponible: la app sigue funcionando solo con red.
-    }
-  }
+  if (writeJson(CACHE_NS, key, entry)) return;
+  // Cuota excedida: se purga solo la caché de red (nunca los datos del usuario)
+  // y se reintenta una vez.
+  clearNamespace(CACHE_NS);
+  writeJson(CACHE_NS, key, entry);
 }
 
 export function isFresh(entry: CacheEntry<unknown>, ttlMs: number): boolean {
@@ -65,10 +34,5 @@ export function isFresh(entry: CacheEntry<unknown>, ttlMs: number): boolean {
 }
 
 export function clearCache(): void {
-  const store = safeStorage();
-  if (!store) return;
-  for (let i = store.length - 1; i >= 0; i -= 1) {
-    const k = store.key(i);
-    if (k && k.startsWith(NAMESPACE)) store.removeItem(k);
-  }
+  clearNamespace(CACHE_NS);
 }

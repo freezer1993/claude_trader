@@ -58,11 +58,12 @@ react-router-dom 7 · Lightweight Charts 5 (TradingView). Sin más dependencias.
 ```
 src/
 ├── components/   Navbar · CoinTable · CoinChart · AnalysisPanel · RiskPanel
-│                 StaleDataBanner · Spinner · ErrorState
-├── context/      CoinContext — estado de mercado compartido (una sola suscripción de polling)
-├── hooks/        useCryptoAPI — useMarkets / useDailySeries / useHourlySeries / useCandles
-├── lib/          coingecko (cliente + cola) · cache (LocalStorage) · indicators
-│                 strategy (reglas MACD+RSI) · risk (score 1-5) · format
+│                 PortfolioPanel · HoldingInput · StaleDataBanner · Spinner · ErrorState
+├── context/      CoinContext — mercado, tenencias y análisis de cartera compartidos
+├── hooks/        useCryptoAPI — useMarkets / useDailySeries / useHourlySeries
+│                 useCandles / useAllCoinSeries
+├── lib/          coingecko (cliente + cola) · storage + cache (LocalStorage) · indicators
+│                 strategy (reglas MACD+RSI) · risk (score 1-5) · portfolio · format
 ├── pages/        Dashboard · CoinDetail
 └── types/        Modelos de dominio compartidos
 ```
@@ -76,7 +77,7 @@ cambiado.
 
 | Ruta             | Contenido                                                        |
 | ---------------- | ---------------------------------------------------------------- |
-| `/`              | Tabla de mercado: precio, volumen 24 h, cambio 24 h, rango 24 h   |
+| `/`              | Tabla de mercado + tenencias + veredicto de cartera                |
 | `/coin/:coinId`  | Gráfico de 10 días + paneles MACD/RSI + análisis + riesgo         |
 | `*`              | Redirección a `/`                                                 |
 
@@ -116,6 +117,50 @@ Modificadores aplicados sobre la fuerza de la señal:
 - **Extensión**: precio a más de un 8 % de su SMA20 → aviso de reversión a la media.
 - **Acuerdo entre temporalidades**: si 1D y 1H coinciden sube la confianza; si se
   contradicen, la recomendación degrada a *Esperar al Margen*.
+
+## Cartera y veredicto por posición (`src/lib/portfolio.ts`)
+
+Cada activo recibe una **puntuación de atractivo** en `[-100, 100]`:
+
+- Señal `BUY` → `+confianza`; `SELL` → `−confianza`.
+- Sin señal confirmada solo puntúa la inercia de la tendencia diaria, y con
+  menos peso: MACD sobre/bajo cero (±12) y RSI por encima de 55 o por debajo de
+  45 (±8). Una tendencia no es una señal.
+- Penalización por riesgo a partir del punto medio de la escala:
+  `−(riesgo − 3) × 12`.
+
+Con esa puntuación se decide cada posición:
+
+| Veredicto           | Condición                                                                        |
+| ------------------- | -------------------------------------------------------------------------------- |
+| **Mantener**        | Puntuación ≥ −20 y ninguna alternativa la supera por 25 puntos                     |
+| **Rotar → X**       | X puntúa ≥ 25 **y** aventaja a la posición actual en ≥ 25 puntos                   |
+| **Pasar a USDT**    | Puntuación < −20 y ninguna alternativa alcanza el umbral de entrada                |
+| **Entrar desde USDT** | Hay saldo en USDT y el mejor activo puntúa ≥ 25                                  |
+| **Seguir en USDT**  | Hay saldo en USDT pero ningún activo alcanza el umbral de entrada                  |
+
+Los umbrales son deliberadamente conservadores: rotar tiene un coste real
+(comisiones, spread, deslizamiento, posible evento fiscal) que el modelo **no**
+cuantifica, así que solo se propone un cambio cuando la ventaja es amplia, no
+marginal. El informe lo advierte de forma explícita.
+
+Detalles de implementación relevantes:
+
+- Las series de las tres monedas **solo se descargan cuando hay al menos una
+  tenencia introducida** (6 peticiones); sin cartera el dashboard sigue
+  costando una sola llamada.
+- El veredicto no se emite hasta que **todas** las series están resueltas.
+  Comparar activos con un subconjunto podría recomendar una rotación que se
+  invierte al terminar de cargar el resto.
+- Las tenencias se guardan en LocalStorage bajo un espacio de nombres distinto
+  al de la caché de red, de modo que purgar la caché nunca borra datos del
+  usuario.
+- El campo de cantidad acepta coma o punto decimal pero **rechaza el separador
+  de millares**: en español `1.500` es ambiguo, y un error de escala en una
+  cantidad de cripto es un error de dinero. Validador y parser comparten un
+  único patrón, así que lo que se marca en rojo y lo que se calcula nunca
+  discrepan. El valor en dólares junto al campo da realimentación inmediata.
+- USDT se asume anclado a 1 US$; no se consulta su precio.
 
 ## Riesgo sistemático 1-5 (`src/lib/risk.ts`)
 

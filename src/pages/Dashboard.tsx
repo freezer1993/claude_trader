@@ -1,4 +1,5 @@
 import { CoinTable } from '../components/CoinTable';
+import { PortfolioPanel } from '../components/PortfolioPanel';
 import { ErrorState } from '../components/ErrorState';
 import { StaleDataBanner } from '../components/StaleDataBanner';
 import { useCoins } from '../context/CoinContext';
@@ -19,8 +20,9 @@ export function Dashboard() {
       <header>
         <h1 className="text-xl font-bold text-white sm:text-2xl">Vista de mercado</h1>
         <p className="mt-1 text-sm text-mist-400">
-          Precio, volumen y variación de 24 horas de BTC, ETH y BNB. Selecciona un activo para ver
-          su gráfico de 10 días y el análisis MACD + RSI.
+          Precio, volumen y variación de 24 horas de BTC, ETH y BNB. Introduce tus tenencias para
+          recibir un veredicto por posición, y selecciona un activo para ver su gráfico de 10 días
+          y el análisis MACD + RSI.
         </p>
       </header>
 
@@ -54,6 +56,8 @@ export function Dashboard() {
           )}
 
           <CoinTable markets={markets.data} loading={markets.state === 'loading'} />
+
+          <PortfolioPanel />
         </>
       )}
     </div>

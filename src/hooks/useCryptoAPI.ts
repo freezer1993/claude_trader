@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchCandles,
   fetchDailySeries,
@@ -72,7 +72,13 @@ function useAsyncResource<T>(fetcher: Fetcher<T>, enabled = true): AsyncResource
     return () => abortRef.current?.abort();
   }, [enabled, run]);
 
-  return { data, state, error, stale, staleReason, fetchedAt, refresh: run };
+  // Identidad estable: el contexto y el informe de cartera dependen de hasta
+  // seis recursos a la vez, y un objeto nuevo por render invalidaría todos sus
+  // useMemo en cada tick del polling.
+  return useMemo(
+    () => ({ data, state, error, stale, staleReason, fetchedAt, refresh: run }),
+    [data, state, error, stale, staleReason, fetchedAt, run],
+  );
 }
 
 const MARKETS_POLL_MS = 60_000;
@@ -137,4 +143,46 @@ export function useCandles(coinId: CoinId | null, enabled: boolean): AsyncResour
     [coinId],
   );
   return useAsyncResource(fetcher, enabled && coinId !== null);
+}
+
+export interface CoinSeries {
+  daily: AsyncResource<PricePoint[]>;
+  hourly: AsyncResource<PricePoint[]>;
+}
+
+export type AllCoinSeries = Record<CoinId, CoinSeries>;
+
+/**
+ * Series de las tres monedas a la vez, necesarias para comparar activos entre
+ * sí en el análisis de cartera. Las llamadas se escriben una a una en lugar de
+ * mapear sobre un array porque las reglas de los hooks exigen un número de
+ * invocaciones fijo y visible.
+ *
+ * `enabled` evita 6 peticiones cuando el usuario aún no ha introducido
+ * tenencias: sin cartera no hay nada que comparar y la cuota de la API
+ * gratuita es escasa.
+ */
+export function useAllCoinSeries(enabled: boolean): AllCoinSeries {
+  const bitcoinDaily = useDailySeries(enabled ? 'bitcoin' : null);
+  const bitcoinHourly = useHourlySeries(enabled ? 'bitcoin' : null);
+  const ethereumDaily = useDailySeries(enabled ? 'ethereum' : null);
+  const ethereumHourly = useHourlySeries(enabled ? 'ethereum' : null);
+  const binancecoinDaily = useDailySeries(enabled ? 'binancecoin' : null);
+  const binancecoinHourly = useHourlySeries(enabled ? 'binancecoin' : null);
+
+  return useMemo(
+    () => ({
+      bitcoin: { daily: bitcoinDaily, hourly: bitcoinHourly },
+      ethereum: { daily: ethereumDaily, hourly: ethereumHourly },
+      binancecoin: { daily: binancecoinDaily, hourly: binancecoinHourly },
+    }),
+    [
+      bitcoinDaily,
+      bitcoinHourly,
+      ethereumDaily,
+      ethereumHourly,
+      binancecoinDaily,
+      binancecoinHourly,
+    ],
+  );
 }

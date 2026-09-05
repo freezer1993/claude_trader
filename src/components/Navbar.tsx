@@ -3,8 +3,8 @@ import { COIN_IDS, COIN_META, useCoins } from '../context/CoinContext';
 import { formatRelative } from '../lib/format';
 
 export function Navbar() {
-  const { markets } = useCoins();
-  const refreshing = markets.state === 'loading' && markets.data !== null;
+  const { markets, refreshAll, hasHoldings, analysisLoading } = useCoins();
+  const refreshing = (markets.state === 'loading' && markets.data !== null) || analysisLoading;
 
   return (
     <header className="sticky top-0 z-30 border-b border-ink-700/70 bg-ink-950/85 backdrop-blur">
@@ -35,8 +35,13 @@ export function Navbar() {
 
           <button
             type="button"
-            onClick={() => markets.refresh(true)}
+            onClick={() => refreshAll(true)}
             disabled={refreshing}
+            title={
+              hasHoldings
+                ? 'Actualiza precios y reanaliza tu cartera'
+                : 'Actualiza los precios de mercado'
+            }
             className="rounded-lg border border-ink-600 bg-ink-850 px-3 py-1.5 text-xs font-medium text-mist-200 transition hover:border-accent-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 md:hidden"
           >
             {refreshing ? 'Actualizando…' : 'Actualizar'}
@@ -83,11 +88,16 @@ export function Navbar() {
           </span>
           <button
             type="button"
-            onClick={() => markets.refresh(true)}
+            onClick={() => refreshAll(true)}
             disabled={refreshing}
+            title={
+              hasHoldings
+                ? 'Actualiza precios y reanaliza tu cartera'
+                : 'Actualiza los precios de mercado'
+            }
             className="rounded-lg border border-ink-600 bg-ink-850 px-3 py-1.5 text-xs font-medium text-mist-200 transition hover:border-accent-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {refreshing ? 'Actualizando…' : 'Actualizar'}
+            {refreshing ? 'Actualizando…' : hasHoldings ? 'Actualizar y analizar' : 'Actualizar'}
           </button>
         </div>
       </nav>
