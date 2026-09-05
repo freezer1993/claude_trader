@@ -6,6 +6,22 @@ recomendación de movimiento diario junto con una calificación de riesgo de 1 a
 
 > Contenido informativo. No es asesoramiento financiero.
 
+## Requisitos
+
+**Node.js 20.19+ o 22.12+** (recomendado: 22 LTS). Lo imponen Vite 8, su motor
+Rolldown y `@vitejs/plugin-react`; `react-router-dom` 7 exige Node 20 como
+mínimo. El repositorio incluye `.nvmrc` y `engine-strict=true`, de modo que
+`npm install` falla con un mensaje explícito en versiones no soportadas.
+
+Con [nvm](https://github.com/nvm-sh/nvm) o
+[nvm-windows](https://github.com/coreybutler/nvm-windows):
+
+```bash
+nvm install 22
+nvm use 22
+node -v          # debe imprimir v22.x
+```
+
 ## Puesta en marcha
 
 ```bash
@@ -17,6 +33,20 @@ npm run preview  # sirve la build de dist/
 
 No requiere clave de API ni backend: todas las peticiones salen del navegador
 contra `https://api.coingecko.com/api/v3`.
+
+### Resolución de problemas
+
+**`SyntaxError: The requested module 'node:util' does not provide an export named 'styleText'`**
+
+Estás ejecutando Node 18 o anterior. `styleText` se añadió en Node 20.12 y
+Rolldown (el empaquetador de Vite 8) lo importa al arrancar. Actualiza a Node 22
+LTS y reinstala:
+
+```bash
+nvm install 22 && nvm use 22
+rm -rf node_modules package-lock.json   # en PowerShell: Remove-Item -Recurse -Force node_modules, package-lock.json
+npm install
+```
 
 ## Stack
 
