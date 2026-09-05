@@ -9,8 +9,14 @@ import {
   type AssetId,
   type PortfolioReport,
 } from '../lib/portfolio';
+import {
+  buildShortTermReport,
+  DEFAULT_SETTINGS,
+  type ShortTermReport,
+  type ShortTermSettings,
+} from '../lib/shortTerm';
 import { readJson, USER_NS, writeJson } from '../lib/storage';
-import type { CoinId, CoinMarket, CoinMeta } from '../types/crypto';
+import type { CoinId, CoinMarket, CoinMeta, PricePoint } from '../types/crypto';
 
 /** Metadatos estáticos: evitan depender de la API para pintar la UI base. */
 export const COIN_META: Record<CoinId, CoinMeta> = {
@@ -33,6 +39,7 @@ export function symbolOf(assetId: AssetId): string {
 export type HoldingsInput = Partial<Record<AssetId, string>>;
 
 const HOLDINGS_KEY = 'holdings';
+const SETTINGS_KEY = 'shortTermSettings';
 
 /** Un recurso está resuelto cuando ya trajo datos o falló definitivamente. */
 function isSettled(resource: AsyncResource<unknown>): boolean {
@@ -53,6 +60,10 @@ interface CoinContextValue {
   hasHoldings: boolean;
   /** null mientras no haya tenencias o falten datos para analizar. */
   report: PortfolioReport | null;
+  /** Oportunidad a corto plazo; null hasta que hay señales de las tres monedas. */
+  shortTerm: ShortTermReport | null;
+  shortTermSettings: ShortTermSettings;
+  setShortTermSettings: (settings: Partial<ShortTermSettings>) => void;
   analysisLoading: boolean;
   analysisError: string | null;
   /** Refresca mercados y, si hay cartera, las series de las tres monedas. */
@@ -60,6 +71,18 @@ interface CoinContextValue {
 }
 
 const CoinContext = createContext<CoinContextValue | null>(null);
+
+function loadSettings(): ShortTermSettings {
+  const stored = readJson<Partial<ShortTermSettings>>(USER_NS, SETTINGS_KEY);
+  const risk = Number(stored?.riskPerTradePct);
+  const horizon = Number(stored?.horizonHours);
+  return {
+    riskPerTradePct:
+      Number.isFinite(risk) && risk > 0 && risk <= 100 ? risk : DEFAULT_SETTINGS.riskPerTradePct,
+    horizonHours:
+      Number.isFinite(horizon) && horizon > 0 ? horizon : DEFAULT_SETTINGS.horizonHours,
+  };
+}
 
 function loadHoldings(): HoldingsInput {
   const stored = readJson<HoldingsInput>(USER_NS, HOLDINGS_KEY);
@@ -78,6 +101,7 @@ function loadHoldings(): HoldingsInput {
 export function CoinProvider({ children }: { children: ReactNode }) {
   const markets = useMarkets();
   const [holdings, setHoldings] = useState<HoldingsInput>(loadHoldings);
+  const [shortTermSettings, setSettingsState] = useState<ShortTermSettings>(loadSettings);
 
   const hasHoldings = useMemo(
     () => Object.values(holdings).some((raw) => parseAmount(raw ?? '') > 0),
@@ -90,6 +114,14 @@ export function CoinProvider({ children }: { children: ReactNode }) {
     setHoldings((prev) => {
       const next = { ...prev, [assetId]: rawValue };
       writeJson(USER_NS, HOLDINGS_KEY, next);
+      return next;
+    });
+  }, []);
+
+  const setShortTermSettings = useCallback((patch: Partial<ShortTermSettings>) => {
+    setSettingsState((prev) => {
+      const next = { ...prev, ...patch };
+      writeJson(USER_NS, SETTINGS_KEY, next);
       return next;
     });
   }, []);
@@ -156,6 +188,22 @@ export function CoinProvider({ children }: { children: ReactNode }) {
     });
   }, [hasHoldings, seriesSettled, marketData, analyses, holdingAmounts]);
 
+  const shortTerm = useMemo(() => {
+    if (!hasHoldings || !marketData || marketData.length === 0) return null;
+    if (!seriesSettled || Object.keys(analyses).length === 0) return null;
+    // Reutiliza las series ya descargadas para la cartera: el criterio de corto
+    // plazo es distinto, pero los datos de partida son los mismos.
+    const hourlySeries: Partial<Record<CoinId, PricePoint[] | null>> = {};
+    for (const id of COIN_IDS) hourlySeries[id] = series[id].hourly.data;
+    return buildShortTermReport({
+      markets: marketData,
+      analyses,
+      hourlySeries,
+      capitalUsdt: holdingAmounts[STABLE_ID] ?? 0,
+      settings: shortTermSettings,
+    });
+  }, [hasHoldings, seriesSettled, marketData, analyses, series, holdingAmounts, shortTermSettings]);
+
   const seriesResources = useMemo(
     () => COIN_IDS.flatMap((id) => [series[id].daily, series[id].hourly]),
     [series],
@@ -189,6 +237,9 @@ export function CoinProvider({ children }: { children: ReactNode }) {
       clearHoldings,
       hasHoldings,
       report,
+      shortTerm,
+      shortTermSettings,
+      setShortTermSettings,
       analysisLoading,
       analysisError,
       refreshAll,
@@ -200,6 +251,9 @@ export function CoinProvider({ children }: { children: ReactNode }) {
       clearHoldings,
       hasHoldings,
       report,
+      shortTerm,
+      shortTermSettings,
+      setShortTermSettings,
       analysisLoading,
       analysisError,
       refreshAll,

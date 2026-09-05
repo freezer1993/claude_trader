@@ -1,3 +1,4 @@
+import { formatNumber } from './format';
 import {
   detectCross,
   detectLevelCross,
@@ -177,7 +178,7 @@ export function analyzeTimeframe(points: PricePoint[], timeframe: Timeframe): Ti
 
   if (action !== 'WAIT' && sma20DeviationPct !== null && Math.abs(sma20DeviationPct) > 8) {
     warnings.push(
-      `El precio está a ${sma20DeviationPct.toFixed(1)} % de su SMA20 ${label}: entrada extendida, riesgo de reversión a la media.`,
+      `El precio está a ${formatNumber(sma20DeviationPct, 1)} % de su SMA20 ${label}: entrada extendida, riesgo de reversión a la media.`,
     );
     strength -= 10;
   }

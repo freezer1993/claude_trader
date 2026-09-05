@@ -58,12 +58,14 @@ react-router-dom 7 · Lightweight Charts 5 (TradingView). Sin más dependencias.
 ```
 src/
 ├── components/   Navbar · CoinTable · CoinChart · AnalysisPanel · RiskPanel
-│                 PortfolioPanel · HoldingInput · StaleDataBanner · Spinner · ErrorState
+│                 PortfolioPanel · ShortTermPanel · HoldingInput
+│                 StaleDataBanner · Spinner · ErrorState
 ├── context/      CoinContext — mercado, tenencias y análisis de cartera compartidos
 ├── hooks/        useCryptoAPI — useMarkets / useDailySeries / useHourlySeries
 │                 useCandles / useAllCoinSeries
 ├── lib/          coingecko (cliente + cola) · storage + cache (LocalStorage) · indicators
-│                 strategy (reglas MACD+RSI) · risk (score 1-5) · portfolio · format
+│                 strategy (reglas MACD+RSI) · risk (score 1-5) · portfolio
+│                 shortTerm (impulso + dimensionamiento) · format
 ├── pages/        Dashboard · CoinDetail
 └── types/        Modelos de dominio compartidos
 ```
@@ -77,7 +79,7 @@ cambiado.
 
 | Ruta             | Contenido                                                        |
 | ---------------- | ---------------------------------------------------------------- |
-| `/`              | Tabla de mercado + tenencias + veredicto de cartera                |
+| `/`              | Mercado + tenencias + veredicto de cartera + oportunidad corta     |
 | `/coin/:coinId`  | Gráfico de 10 días + paneles MACD/RSI + análisis + riesgo         |
 | `*`              | Redirección a `/`                                                 |
 
@@ -161,6 +163,58 @@ Detalles de implementación relevantes:
   único patrón, así que lo que se marca en rojo y lo que se calcula nunca
   discrepan. El valor en dólares junto al campo da realimentación inmediata.
 - USDT se asume anclado a 1 US$; no se consulta su precio.
+
+## Oportunidad a corto plazo (`src/lib/shortTerm.ts`)
+
+Criterio **distinto** al de la cartera: allí pesa la señal confirmada y el
+riesgo estructural, y aquí pesa el momentum reciente. Una moneda puede ser
+buena para mantener y mala para entrar hoy, y al revés.
+
+### Filtro de tendencia alcista
+
+Cuatro condiciones, todas obligatorias:
+
+| Condición                        | Umbral      |
+| -------------------------------- | ----------- |
+| Variación en 24 h                | ≥ 0,5 %     |
+| Precio sobre su SMA20 horaria    | ≥ 0,2 %     |
+| Línea MACD horaria               | > 0         |
+| RSI horario                      | entre 45 y 72 |
+
+Dos decisiones de diseño que no son obvias:
+
+- Se usa el **signo de la línea MACD**, no el del histograma. En una tendencia
+  sostenida y regular el histograma converge a cero, porque mide la
+  *aceleración* del impulso y no el impulso: exigirlo positivo rechazaría justo
+  las tendencias más limpias. Que el histograma se expanda sí suma puntuación,
+  como bonificación.
+- **No** se exige que las últimas horas sean positivas. Un retroceso dentro de
+  una tendencia alcista es mejor entrada que comprar el último tramo de subida,
+  que es la conducta que ya penaliza el tramo de RSI en sobrecompra.
+
+Si nada supera el filtro, no se propone operación. "La menos mala de tres que
+caen" no es una moneda al alza.
+
+### Dimensionamiento de la posición
+
+Riesgo fijo, no porcentaje fijo del saldo: se decide primero cuánto se acepta
+perder y el tamaño sale de la distancia al stop. Un porcentaje fijo ignoraría
+que una moneda volátil necesita más margen y expone mucho más capital real al
+mismo movimiento adverso.
+
+```
+σ_horizonte  = σ_horaria × √horas          (escalado temporal de la volatilidad)
+stop         = precio × (1 − 1,5 × σ_horizonte)
+posición     = (saldo × riesgo%) / distancia_al_stop%
+posición     = min(posición, 35 % del saldo)   ← tope duro
+```
+
+Objetivos a 1,5R y 2,5R sobre esa misma distancia. El riesgo por operación
+(0,5-5 %) y el horizonte (12/24/72 h) son configurables y se guardan.
+
+Cuando el tope de exposición recorta la posición, el panel muestra el **riesgo
+efectivo** junto al solicitado, para no atribuir al plan un riesgo que no está
+tomando.
 
 ## Riesgo sistemático 1-5 (`src/lib/risk.ts`)
 

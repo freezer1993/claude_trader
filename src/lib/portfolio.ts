@@ -103,7 +103,7 @@ export function scoreAsset(coinId: CoinId, analysis: AnalysisInput): AssetScore 
   // El riesgo penaliza a partir del punto medio de la escala 1-5. Un activo
   // atractivo pero en condiciones extremas deja de serlo.
   const riskPenalty = Math.max(0, risk.rawScore - 3) * 12;
-  if (riskPenalty > 0) {
+  if (Math.round(riskPenalty) >= 1) {
     rationale += ` Penalización por riesgo ${risk.level}/5 (−${Math.round(riskPenalty)}).`;
   }
 
