@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { closePool, getPool } from './pool.ts';
+import { closePool, describeConnectionError, getPool } from './pool.ts';
 
 /**
  * Ejecutor de migraciones mínimo: aplica en orden los .sql de este directorio
@@ -70,7 +70,7 @@ main()
   .then(() => closePool())
   .then(() => process.exit(0))
   .catch(async (error) => {
-    console.error('[migrate] error:', error instanceof Error ? error.message : error);
+    console.error('[migrate] error:', describeConnectionError(error));
     await closePool();
     process.exit(1);
   });

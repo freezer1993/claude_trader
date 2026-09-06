@@ -2,7 +2,7 @@ import express, { type NextFunction, type Request, type Response } from 'express
 import { authenticate, currentUser } from './lib/auth.ts';
 import { loadConfig } from './lib/config.ts';
 import { ApiError } from './lib/errors.ts';
-import { closePool, getPool } from './db/pool.ts';
+import { closePool, describeConnectionError, getPool } from './db/pool.ts';
 import { holdingsRouter } from './routes/holdings.ts';
 import { analysisRouter } from './routes/analysis.ts';
 import { portfolioRouter } from './routes/portfolio.ts';
@@ -40,11 +40,7 @@ app.get('/api/health', async (_req, res) => {
     await getPool().query('SELECT 1');
     res.json({ ok: true, database: 'up' });
   } catch (error) {
-    res.status(503).json({
-      ok: false,
-      database: 'down',
-      message: error instanceof Error ? error.message : 'Error desconocido.',
-    });
+    res.status(503).json({ ok: false, database: 'down', message: describeConnectionError(error) });
   }
 });
 
@@ -88,6 +84,16 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
 const server = app.listen(config.port, () => {
   console.log(`[api] escuchando en http://localhost:${config.port}`);
   console.log(`[api] orígenes CORS permitidos: ${config.corsOrigins.join(', ')}`);
+  // Se comprueba la base al arrancar: descubrir que no conecta en la primera
+  // petición del navegador convierte un problema de configuración en un fallo
+  // difuso de la interfaz.
+  getPool()
+    .query('SELECT 1')
+    .then(() => console.log('[api] conexión con PostgreSQL correcta.'))
+    .catch((error) => {
+      console.error('[api] no se pudo conectar con PostgreSQL:');
+      console.error(describeConnectionError(error));
+    });
 });
 
 async function shutdown(signal: string): Promise<void> {

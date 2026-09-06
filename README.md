@@ -36,6 +36,20 @@ Por separado: `npm run dev` (frontend), `npm run dev:api` (API),
 `npm run build` (compilación de producción), `npm run db:reset` (recrea el
 esquema desde cero, solo desarrollo).
 
+Los scripts del servidor cargan `.env` automáticamente con
+`--env-file-if-exists`, sin dependencias añadidas. Si el fichero no existe se
+usan las variables del entorno, que es lo que hace falta en un despliegue.
+
+**En macOS con Homebrew el superusuario de PostgreSQL es tu usuario del
+sistema, no `postgres`.** La cadena suele quedar así:
+
+```
+DATABASE_URL=postgres://TU_USUARIO@localhost:5432/claude_trader
+```
+
+Si algo falla al conectar, el mensaje dice qué arreglar: rol inexistente, base
+sin crear, servidor apagado o host mal escrito. La contraseña nunca se imprime.
+
 Los precios siguen viniendo del navegador contra la API pública de CoinGecko,
 sin clave. El backend solo guarda tenencias, movimientos y análisis.
 
