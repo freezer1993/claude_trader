@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { COIN_META, useCoins } from '../context/CoinContext';
 import { formatCompactUsd, formatPercent, formatPrice } from '../lib/format';
 import { parseAmount } from '../lib/portfolio';
-import { HoldingInput } from './HoldingInput';
+import { HoldingField } from './HoldingField';
 import { SkeletonBlock } from './Spinner';
 import type { CoinMarket } from '../types/crypto';
 
@@ -12,7 +12,7 @@ interface CoinTableProps {
 }
 
 export function CoinTable({ markets, loading }: CoinTableProps) {
-  const { holdings, setHolding } = useCoins();
+  const { holdings, drafts } = useCoins();
 
   if (!markets && loading) {
     return (
@@ -28,7 +28,10 @@ export function CoinTable({ markets, loading }: CoinTableProps) {
     return <p className="text-sm text-mist-400">No hay datos de mercado disponibles.</p>;
   }
 
-  const holdingValue = (coin: CoinMarket) => parseAmount(holdings[coin.id] ?? '') * coin.price;
+  // El valor mostrado sigue al borrador, no al saldo guardado: da
+  // realimentación inmediata de lo que se está escribiendo antes de confirmar.
+  const holdingValue = (coin: CoinMarket) => parseAmount(drafts[coin.id] ?? '') * coin.price;
+  void holdings;
 
   return (
     <>
@@ -87,11 +90,7 @@ export function CoinTable({ markets, loading }: CoinTableProps) {
                     {formatCompactUsd(coin.volume24h)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <HoldingInput
-                      symbol={meta.symbol}
-                      value={holdings[coin.id] ?? ''}
-                      onChange={(raw) => setHolding(coin.id, raw)}
-                    />
+                    <HoldingField assetId={coin.id} priceUsd={coin.price} />
                   </td>
                   <td className="px-4 py-3 text-right text-mist-200">
                     {value > 0 ? formatPrice(value) : <span className="text-mist-400">—</span>}
@@ -149,11 +148,7 @@ export function CoinTable({ markets, loading }: CoinTableProps) {
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-ink-700/60 pt-3">
                 <span className="text-xs text-mist-400">Tenencia</span>
                 <span className="flex items-center gap-3">
-                  <HoldingInput
-                    symbol={meta.symbol}
-                    value={holdings[coin.id] ?? ''}
-                    onChange={(raw) => setHolding(coin.id, raw)}
-                  />
+                  <HoldingField assetId={coin.id} priceUsd={coin.price} />
                   <span className="text-xs text-mist-200">
                     {value > 0 ? formatPrice(value) : '—'}
                   </span>

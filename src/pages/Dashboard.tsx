@@ -1,6 +1,7 @@
 import { CoinTable } from '../components/CoinTable';
 import { PortfolioPanel } from '../components/PortfolioPanel';
 import { ShortTermPanel } from '../components/ShortTermPanel';
+import { HistoryPanel } from '../components/HistoryPanel';
 import { ErrorState } from '../components/ErrorState';
 import { StaleDataBanner } from '../components/StaleDataBanner';
 import { useCoins } from '../context/CoinContext';
@@ -61,6 +62,8 @@ export function Dashboard() {
           <PortfolioPanel />
 
           <ShortTermPanel />
+
+          <HistoryPanel />
         </>
       )}
     </div>

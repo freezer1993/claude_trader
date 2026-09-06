@@ -8,7 +8,7 @@ recomendación de movimiento diario junto con una calificación de riesgo de 1 a
 
 ## Requisitos
 
-**Node.js 20.19+ o 22.12+** (recomendado: 22 LTS). Lo imponen Vite 8, su motor
+**PostgreSQL 14+** para el histórico, y **Node.js 20.19+ o 22.12+** (recomendado: 22 LTS). Lo imponen Vite 8, su motor
 Rolldown y `@vitejs/plugin-react`; `react-router-dom` 7 exige Node 20 como
 mínimo. El repositorio incluye `.nvmrc` y `engine-strict=true`, de modo que
 `npm install` falla con un mensaje explícito en versiones no soportadas.
@@ -26,13 +26,22 @@ node -v          # debe imprimir v22.x
 
 ```bash
 npm install
-npm run dev      # servidor de desarrollo
-npm run build    # tsc -b && vite build (compilación de producción)
-npm run preview  # sirve la build de dist/
+cp .env.example .env          # ajusta DATABASE_URL
+createdb claude_trader        # o CREATE DATABASE desde psql
+npm run db:migrate            # aplica el esquema
+npm run dev:all               # API (:3001) + frontend (:5173)
 ```
 
-No requiere clave de API ni backend: todas las peticiones salen del navegador
-contra `https://api.coingecko.com/api/v3`.
+Por separado: `npm run dev` (frontend), `npm run dev:api` (API),
+`npm run build` (compilación de producción), `npm run db:reset` (recrea el
+esquema desde cero, solo desarrollo).
+
+Los precios siguen viniendo del navegador contra la API pública de CoinGecko,
+sin clave. El backend solo guarda tenencias, movimientos y análisis.
+
+**Sin base de datos la aplicación sigue funcionando**: si el API no responde,
+las tenencias vuelven a LocalStorage y la interfaz lo indica con la etiqueta
+*Solo este navegador*. Se pierde el histórico, no el análisis.
 
 ### Resolución de problemas
 
@@ -53,14 +62,105 @@ npm install
 React 19 · TypeScript 5.9 (modo estricto) · Vite 8 · Tailwind CSS 4 ·
 react-router-dom 7 · Lightweight Charts 5 (TradingView). Sin más dependencias.
 
+## Persistencia
+
+### Esquema
+
+Cuatro migraciones en `server/db/migrations/`, aplicadas en orden por
+`npm run db:migrate` y registradas en `schema_migrations`.
+
+| Bloque | Tablas |
+| ------ | ------ |
+| Identidad | `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `auth_sessions`, `api_tokens`, `audit_log` |
+| Cartera | `assets`, `holdings`, `holding_transactions`, `price_snapshots` |
+| Análisis | `analysis_runs`, `analysis_signals`, `portfolio_recommendations`, `short_term_opportunities`, `portfolio_snapshots`, `portfolio_snapshot_positions` |
+
+Decisiones que conviene conocer antes de tocar el esquema:
+
+- **Las tablas de identidad existen desde la primera migración**, aunque el
+  login todavía no. El resto del esquema referencia `user_id` con clave ajena,
+  y añadir esa columna más tarde obligaría a migrar datos ya escritos. Un
+  usuario local semilla (UUID fijo `00000000-…-0001`) ocupa el hueco.
+- **Los importes son `numeric(38,18)`, nunca `float`.** En coma flotante
+  binaria 0,1 + 0,2 no es 0,3, y aquí se cuenta dinero. El cliente envía la
+  cantidad como **cadena canónica**, no como número: convertir "0,1" a double y
+  volver a texto produce `0.100000000000000006`, que es exactamente el error
+  que `numeric` evita.
+- **`holding_transactions` es inmutable.** Cada cambio guarda el saldo anterior,
+  el posterior y el delta, con una restricción que obliga a que cuadren. El
+  saldo vigente en `holdings` es un agregado materializado por rendimiento.
+- **Cada análisis se archiva entero o no se archiva.** Señales,
+  recomendaciones, oportunidad y foto de totales van en una transacción: un
+  registro a medias daría recomendaciones sin las señales que las justifican.
+
+### Concurrencia
+
+Guardar un saldo toma un **bloqueo consultivo** por `(usuario, activo)` antes
+de leer el valor anterior:
+
+```sql
+SELECT pg_advisory_xact_lock(hashtext($user_id), $asset_id);
+```
+
+No sirve `SELECT ... FOR UPDATE`: la primera vez que se guarda un activo la
+fila de `holdings` aún no existe, y bloquear cero filas no bloquea nada. Con 25
+escrituras simultáneas sobre un activo nuevo, esa versión rompía la cadena de
+saldos; con el bloqueo consultivo, 0 rupturas.
+
+### API
+
+Todas las rutas bajo `/api` pasan por `authenticate()` y declaran el permiso
+que exigen con `requirePermission()`.
+
+| Método | Ruta | Permiso |
+| ------ | ---- | ------- |
+| GET | `/api/health` | — |
+| GET | `/api/me` | — |
+| GET | `/api/holdings` | `holdings:read` |
+| PUT | `/api/holdings/:symbol` | `holdings:write` |
+| GET | `/api/holdings/:symbol/history` | `holdings:read` |
+| GET | `/api/holdings/history/all` | `holdings:read` |
+| POST | `/api/analysis/runs` | `analysis:write` |
+| GET | `/api/analysis/runs` | `analysis:read` |
+| GET | `/api/analysis/runs/:id` | `analysis:read` |
+| GET | `/api/portfolio/history` | `portfolio:read` |
+| GET | `/api/portfolio/summary` | `portfolio:read` |
+
+### Preparado para el login
+
+`server/lib/auth.ts` es el **único** punto que da por hecho un usuario fijo.
+Hoy `resolveUser` devuelve el usuario local configurado, pero ya carga sus
+roles y permisos reales desde la base. Para añadir autenticación:
+
+1. Leer el `Authorization: Bearer` en `authenticate()` y validarlo contra
+   `api_tokens.token_hash` o `auth_sessions.refresh_token_hash`.
+2. Devolver el usuario de ese token en lugar del local.
+3. Rellenar `users.password_hash` (argon2 o bcrypt) en el alta.
+
+Las rutas no se tocan: ya exigen permisos, ya filtran por `user_id` y el
+`audit_log` ya registra quién hizo cada cambio.
+
+## Guardado de tenencias
+
+El campo de cantidad es un **borrador**: escribir no guarda. El análisis usa el
+saldo confirmado hasta que se pulsa *Guardar* y se acepta el diálogo, que
+muestra saldo anterior, nuevo, diferencia y su valor en dólares. Sin esa
+separación, cada pulsación de tecla generaría un movimiento en el histórico.
+
+El botón se habilita solo cuando el borrador difiere del saldo guardado (se
+comparan en forma canónica, así que "1,50" y "1.5" no cuentan como cambio).
+Tras guardar aparece un aviso de éxito con el número de movimiento, o de error
+con el motivo; los de error no se descartan solos.
+
 ## Arquitectura
 
 ```
 src/
 ├── components/   Navbar · CoinTable · CoinChart · AnalysisPanel · RiskPanel
-│                 PortfolioPanel · ShortTermPanel · HoldingInput
+│                 PortfolioPanel · ShortTermPanel · HistoryPanel · HoldingField
+│                 ConfirmDialog · ToastViewport · PersistenceBadge
 │                 StaleDataBanner · Spinner · ErrorState
-├── context/      CoinContext — mercado, tenencias y análisis de cartera compartidos
+├── context/      CoinContext (mercado, tenencias, análisis) · ToastContext
 ├── hooks/        useCryptoAPI — useMarkets / useDailySeries / useHourlySeries
 │                 useCandles / useAllCoinSeries
 ├── lib/          coingecko (cliente + cola) · storage + cache (LocalStorage) · indicators
@@ -68,6 +168,12 @@ src/
 │                 shortTerm (impulso + dimensionamiento) · format
 ├── pages/        Dashboard · CoinDetail
 └── types/        Modelos de dominio compartidos
+
+server/
+├── db/           pool · migrate (ejecutor) · migrations/*.sql
+├── lib/          config · auth (punto único de identidad) · errors · validate
+├── routes/       holdings · analysis · portfolio
+└── index.ts      Express: CORS, autenticación, manejo de errores
 ```
 
 Flujo de datos: `coingecko.ts` → `cache.ts` → `useCryptoAPI` → `CoinContext` →

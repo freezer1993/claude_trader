@@ -10,16 +10,27 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "dev:api": "node --experimental-strip-types --watch server/index.ts",
+    "dev:all": "node scripts/dev-all.mjs",
+    "build:server": "tsc -p tsconfig.server.json --noEmit",
+    "db:migrate": "node --experimental-strip-types server/db/migrate.ts",
+    "db:reset": "node --experimental-strip-types server/db/migrate.ts --reset",
+    "start:api": "node --experimental-strip-types server/index.ts"
   },
   "dependencies": {
+    "express": "^5.1.0",
     "lightweight-charts": "^5.2.1",
+    "pg": "^8.16.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",
+    "@types/express": "^5.0.3",
+    "@types/node": "^26.4.1",
+    "@types/pg": "^8.15.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^6.0.0",

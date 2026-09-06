@@ -1,12 +1,15 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { CoinProvider } from './context/CoinContext';
+import { ToastProvider } from './context/ToastContext';
+import { ToastViewport } from './components/ToastViewport';
 import { CoinDetail } from './pages/CoinDetail';
 import { Dashboard } from './pages/Dashboard';
 
 export default function App() {
   return (
-    <CoinProvider>
+    <ToastProvider>
+      <CoinProvider>
       <div className="min-h-dvh bg-ink-950">
         <a
           href="#contenido"
@@ -27,6 +30,8 @@ export default function App() {
           Contenido informativo, no asesoramiento financiero.
         </footer>
       </div>
-    </CoinProvider>
+      </CoinProvider>
+      <ToastViewport />
+    </ToastProvider>
   );
 }

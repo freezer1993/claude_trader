@@ -1,5 +1,9 @@
+import { useState } from 'react';
 import { COIN_META, symbolOf, useCoins } from '../context/CoinContext';
-import { HoldingInput } from './HoldingInput';
+import { useToast } from '../context/ToastContext';
+import { ConfirmDialog } from './ConfirmDialog';
+import { PersistenceBadge } from './PersistenceBadge';
+import { HoldingField } from './HoldingField';
 import { Spinner } from './Spinner';
 import { formatNumber, formatPrice, formatRelative } from '../lib/format';
 import { STABLE_ID, type PositionAction, type PositionAdvice } from '../lib/portfolio';
@@ -13,8 +17,31 @@ const ACTION_STYLES: Record<PositionAction, { chip: string; label: string }> = {
 };
 
 export function PortfolioPanel() {
-  const { holdings, setHolding, clearHoldings, hasHoldings, report, analysisLoading, analysisError } =
+  const { clearHoldings, hasHoldings, report, analysisLoading, analysisError, persistenceMode } =
     useCoins();
+  const { push } = useToast();
+  const [confirmingClear, setConfirmingClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const handleClear = async () => {
+    setClearing(true);
+    try {
+      await clearHoldings();
+      push({
+        tone: 'success',
+        title: 'Cartera vaciada',
+        description:
+          persistenceMode === 'api'
+            ? 'Cada saldo se ha puesto a cero y queda registrado como movimiento en el histórico.'
+            : 'Saldos borrados de este navegador.',
+      });
+    } catch {
+      push({ tone: 'error', title: 'No se pudo vaciar la cartera' });
+    } finally {
+      setClearing(false);
+      setConfirmingClear(false);
+    }
+  };
 
   return (
     <section
@@ -37,26 +64,25 @@ export function PortfolioPanel() {
             aparece junto a cada campo.
           </p>
         </div>
-        {hasHoldings && (
-          <button
-            type="button"
-            onClick={clearHoldings}
-            className="rounded-lg border border-ink-600 px-2.5 py-1 text-xs font-medium text-mist-400 transition hover:border-bear-500/60 hover:text-bear-400"
-          >
-            Vaciar
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <PersistenceBadge />
+          {hasHoldings && (
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(true)}
+              className="rounded-lg border border-ink-600 px-2.5 py-1 text-xs font-medium text-mist-400 transition hover:border-bear-500/60 hover:text-bear-400"
+            >
+              Vaciar
+            </button>
+          )}
+        </div>
       </header>
 
       {/* El USDT se introduce aquí y no en la tabla de mercado porque no es un
           activo seguido por la API: su precio se asume fijo en 1 USD. */}
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-ink-700/60 bg-ink-850/60 p-3">
         <span className="text-xs text-mist-400">Saldo en USDT (posición refugio)</span>
-        <HoldingInput
-          symbol="USDT"
-          value={holdings[STABLE_ID] ?? ''}
-          onChange={(raw) => setHolding(STABLE_ID, raw)}
-        />
+        <HoldingField assetId={STABLE_ID} />
         <span className="text-[11px] text-mist-400">Se asume la paridad 1 USDT = 1 US$.</span>
       </div>
 
@@ -161,6 +187,23 @@ export function PortfolioPanel() {
           </p>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmingClear}
+        busy={clearing}
+        tone="danger"
+        title="Vaciar toda la cartera"
+        confirmLabel="Vaciar"
+        onCancel={() => setConfirmingClear(false)}
+        onConfirm={() => void handleClear()}
+      >
+        <p>
+          Se pondrán a cero los saldos de todos los activos.
+          {persistenceMode === 'api'
+            ? ' El histórico de movimientos se conserva: cada puesta a cero se registra como un movimiento más.'
+            : ' Los saldos guardados en este navegador se borrarán.'}
+        </p>
+      </ConfirmDialog>
     </section>
   );
 }

@@ -315,6 +315,26 @@ export function isValidAmountInput(raw: string): boolean {
 }
 
 /**
+ * Forma canónica de la cantidad, como cadena.
+ *
+ * Es lo que se envía a la base y lo que se compara para saber si hay cambios
+ * pendientes. Nunca pasa por un `number`: convertir "0,8" a double y volver a
+ * texto produce "0.800000000000000044", que es exactamente el error de
+ * precisión que la columna numeric existe para evitar. El double sigue
+ * usándose para valorar y graficar, donde el error es irrelevante, pero no
+ * para lo que se persiste.
+ */
+export function toDecimalString(raw: string): string {
+  const trimmed = raw.trim().replace(',', '.');
+  if (trimmed === '' || !AMOUNT_PATTERN.test(trimmed)) return '0';
+
+  const [rawInteger = '', rawFraction = ''] = trimmed.split('.');
+  const integer = rawInteger.replace(/^0+(?=\d)/, '') || '0';
+  const fraction = rawFraction.replace(/0+$/, '');
+  return fraction === '' ? integer : `${integer}.${fraction}`;
+}
+
+/**
  * Devuelve 0 para cualquier entrada que el validador rechace, de modo que lo
  * que se marca en rojo y lo que se calcula nunca discrepen.
  */
