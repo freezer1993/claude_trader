@@ -81,9 +81,14 @@ app.use((error: unknown, _req: Request, res: Response, _next: NextFunction) => {
   });
 });
 
-const server = app.listen(config.port, () => {
-  console.log(`[api] escuchando en http://localhost:${config.port}`);
+const server = app.listen(config.port, config.host, () => {
+  console.log(`[api] escuchando en http://${config.host}:${config.port}`);
   console.log(`[api] orígenes CORS permitidos: ${config.corsOrigins.join(', ')}`);
+  if (config.host !== '127.0.0.1' && config.host !== 'localhost') {
+    console.warn(
+      `[api] AVISO: escuchando en ${config.host}, accesible desde otras máquinas. Sin login, cualquiera que alcance este puerto puede leer y modificar las tenencias.`,
+    );
+  }
   // Se comprueba la base al arrancar: descubrir que no conecta en la primera
   // petición del navegador convierte un problema de configuración en un fallo
   // difuso de la interfaz.

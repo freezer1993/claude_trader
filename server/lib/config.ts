@@ -4,6 +4,8 @@
  */
 export interface ServerConfig {
   port: number;
+  /** Interfaz de escucha. Por defecto solo loopback. */
+  host: string;
   databaseUrl: string;
   /**
    * Usuario propietario de los datos mientras no exista login. Es el único
@@ -16,6 +18,18 @@ export interface ServerConfig {
 }
 
 const DEFAULT_LOCAL_USER = '00000000-0000-4000-8000-000000000001';
+
+/*
+ * Se escucha solo en loopback por defecto.
+ *
+ * Express, si no se le indica interfaz, escucha en 0.0.0.0 y deja el API
+ * accesible desde toda la red local. Mientras no exista login eso significa
+ * que cualquiera en la misma wifi puede leer y modificar las tenencias sin
+ * credencial alguna. Para ver la web desde el móvil no hace falta: el
+ * navegador habla con Vite, y es Vite quien reenvía a este proceso por
+ * localhost.
+ */
+const DEFAULT_HOST = '127.0.0.1';
 
 export function loadConfig(): ServerConfig {
   const databaseUrl = process.env.DATABASE_URL;
@@ -32,6 +46,7 @@ export function loadConfig(): ServerConfig {
 
   return {
     port,
+    host: process.env.API_HOST ?? DEFAULT_HOST,
     databaseUrl,
     localUserId: process.env.LOCAL_USER_ID ?? DEFAULT_LOCAL_USER,
     corsOrigins: (process.env.CORS_ORIGINS ?? 'http://localhost:5173')

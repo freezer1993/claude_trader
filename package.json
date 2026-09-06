@@ -16,7 +16,9 @@
     "build:server": "tsc -p tsconfig.server.json --noEmit",
     "db:migrate": "node --env-file-if-exists=.env --experimental-strip-types server/db/migrate.ts",
     "db:reset": "node --env-file-if-exists=.env --experimental-strip-types server/db/migrate.ts --reset",
-    "start:api": "node --env-file-if-exists=.env --experimental-strip-types server/index.ts"
+    "start:api": "node --env-file-if-exists=.env --experimental-strip-types server/index.ts",
+    "dev:lan": "CT_LAN=1 vite",
+    "dev:all:lan": "CT_LAN=1 node scripts/dev-all.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

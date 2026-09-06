@@ -53,6 +53,29 @@ sin crear, servidor apagado o host mal escrito. La contraseña nunca se imprime.
 Los precios siguen viniendo del navegador contra la API pública de CoinGecko,
 sin clave. El backend solo guarda tenencias, movimientos y análisis.
 
+### Verlo desde el móvil en la misma red
+
+```bash
+npm run dev:all:lan     # o: npm run dev -- --host
+```
+
+Vite imprime la URL de red (`http://192.168.x.x:5173`). Ábrela en el móvil, o
+usa `http://nombre-de-tu-mac.local:5173`, que también está autorizado.
+
+**No hace falta exponer el API.** El cliente llama a `/api` de forma relativa y
+el proxy de Vite corre en tu equipo, así que la petición del móvil llega a Vite
+y este la reenvía a `localhost:3001`. Por eso el API escucha solo en loopback
+(`127.0.0.1`): mientras no exista login, abrirlo a la red dejaría que cualquiera
+en la misma wifi leyera y modificara tus saldos. Si aun así lo necesitas,
+`API_HOST=0.0.0.0` lo permite y el arranque avisa de lo que implica.
+
+En macOS la primera vez aparecerá el diálogo del cortafuegos pidiendo permiso
+para aceptar conexiones entrantes: acéptalo.
+
+Ten presente que **cualquiera en tu red podrá ver y modificar la cartera**,
+porque todavía no hay autenticación. En una red doméstica de confianza es
+razonable; en una wifi compartida o pública, no.
+
 **Sin base de datos la aplicación sigue funcionando**: si el API no responde,
 las tenencias vuelven a LocalStorage y la interfaz lo indica con la etiqueta
 *Solo este navegador*. Se pierde el histórico, no el análisis.

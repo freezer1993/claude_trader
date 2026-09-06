@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { symbolOf, useCoins } from '../context/CoinContext';
 import { useToast } from '../context/ToastContext';
 import { formatNumber, formatPrice } from '../lib/format';
@@ -21,6 +21,14 @@ interface HoldingFieldProps {
 export function HoldingField({ assetId, priceUsd, className = '' }: HoldingFieldProps) {
   const { drafts, holdings, setDraft, resetDraft, isDirty, saveHolding, savingAsset, persistenceMode } =
     useCoins();
+  /*
+   * Identificador por instancia, no derivado del activo: el mismo activo se
+   * renderiza dos veces en el panel (la tabla de escritorio y la tarjeta de
+   * móvil conviven en el DOM, ocultas por CSS). Un id fijo produciría
+   * duplicados, que son HTML inválido y hacen que el label apunte al campo
+   * equivocado para un lector de pantalla.
+   */
+  const inputId = useId();
   const { push } = useToast();
   const [confirming, setConfirming] = useState(false);
 
@@ -48,11 +56,11 @@ export function HoldingField({ assetId, priceUsd, className = '' }: HoldingField
   return (
     <>
       <span className={`inline-flex items-center gap-1.5 ${className}`}>
-        <label className="sr-only" htmlFor={`holding-${assetId}`}>
+        <label className="sr-only" htmlFor={inputId}>
           Cantidad de {symbol} en tu cartera
         </label>
         <input
-          id={`holding-${assetId}`}
+          id={inputId}
           type="text"
           inputMode="decimal"
           autoComplete="off"
